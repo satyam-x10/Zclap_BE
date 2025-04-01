@@ -1,8 +1,11 @@
 import os
 from groq import Groq
+from dotenv import load_dotenv
 
 def chat_with_groq(user_input: str) -> str:
-    client = Groq(api_key="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")
+    load_dotenv()  # Load environment variables from .env file
+    api_key = os.getenv("GROQ_API_KEY")
+    client = Groq(api_key=api_key)
 
     completion = client.chat.completions.create(
         model="llama-3.3-70b-versatile",

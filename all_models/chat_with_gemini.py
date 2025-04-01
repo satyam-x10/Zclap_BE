@@ -1,10 +1,14 @@
 import os
 from google import genai
 from google.genai import types
+from dotenv import load_dotenv
 
 def chat_with_gemini( prompt: str) -> str:
     # Initialize Gemini client
-    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+    load_dotenv()  # Load environment variables from .env file
+    api_key = os.getenv("GEMINI_API_KEY")
+    print(f"Using API key: {api_key}")  # Debugging line to check API key
+    client = genai.Client(api_key=api_key)
     model = "gemini-2.0-flash"
     
     contents = [

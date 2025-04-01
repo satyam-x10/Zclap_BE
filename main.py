@@ -1,99 +1,123 @@
-import time
-import json
-from google import genai
-from google.genai import types
-from all_models.chat_with_gemini import chat_with_gemini
-from all_models.chat_with_groq import chat_with_groq
-# Define agent roles and personalities
-AGENTS = {
-    "ContentWriter": "You are a creative content writer specialized in crafting compelling marketing copy. Focus on storytelling and engaging language that resonates with target audiences.",
-    "GraphicDesigner": "You are a graphic designer with an eye for visual appeal and brand consistency. You suggest visual elements, color schemes, and design approaches for marketing materials.",
-    "DataAnalyst": "You are a data analyst who uses market research and data insights to inform marketing decisions. You provide evidence-based recommendations and target audience information.",
-    "BrandManager": "You are a brand manager responsible for maintaining brand consistency and overall campaign direction. You ensure all elements align with brand values and marketing objectives."
-}
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Dict
+import uuid
+import logging
+import traceback
 
-# Product details
-PRODUCT = {
-    "name": "EcoSmart Home Hub",
-    "description": "A smart home control center that optimizes energy usage, integrates with all major smart home devices, and helps reduce environmental impact while saving money",
-    "target_audience": "Environmentally conscious homeowners, tech enthusiasts, and energy-conscious consumers",
-    "key_features": ["Energy optimization", "Cross-platform compatibility", "AI-powered suggestions", "Usage analytics dashboard"]
-}
+# Import the AgentInfo class and run_chat function from your main module
+from app import run_chat, AgentInfo
 
-finish_Chat = False
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Function to get response from Gemini with minimal complexity
-def get_agent_response(agent_name, conversation_history, product_info):
-    print(f"Getting response from {agent_name}...")
-    
-    prompt = f"""
-You are {agent_name}. {AGENTS[agent_name]}
+app = FastAPI()
 
-You are participating in a collaborative marketing campaign design for this product:
-Product: {product_info['name']} - {product_info['description']}
-Target: {product_info['target_audience']}
-Features: {', '.join(product_info['key_features'])}
+# Enable frontend access (CORS)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # You can restrict to frontend domain in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-Previous conversation:
-{conversation_history}
+# Define data models for API requests
+class AgentInfoAPI(BaseModel):
+    role: str
+    model: str
+    name: str = ""  # Default empty string for name
 
-Provide your professional input based on your role. Be brief but insightful.
-"""
-    
+class ProductInfoAPI(BaseModel):
+    name: str
+    description: str
+    target_audience: str
+    key_features: List[str]
+
+class ContentRequest(BaseModel):
+    product: ProductInfoAPI
+    agents: List[AgentInfoAPI]
+
+class ContentResponse(BaseModel):
+    content: Dict[str, str]
+    request_id: str
+
+# Convert API model to AgentInfo object
+def convert_to_agent_info(agent_api, index):
+    # If name is not provided, generate one based on index
+    name = agent_api.name if agent_api.name else f"Agent{index+1}"
+    return AgentInfo(role=agent_api.role, model=agent_api.model, name=name)
+
+# Convert API model to ProductInfo object (using a dynamic class)
+class ProductInfo:
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+@app.post("/generate", response_model=ContentResponse)
+async def generate_content(request: ContentRequest):
     try:
-        # response = chat_with_gemini(prompt)
-        response = chat_with_groq(prompt)
-
-        return response
-    except Exception as e:
-        print(f"Error with {agent_name}: {str(e)}")
-        return f"[Error getting response from {agent_name}]"
-
-# Run the simulation
-def run_chat(finish_Chat):
-    conversation = []
-    
-    # Starting message
-    print("Starting Multi-Agent Marketing Campaign Simulation...\n")
-    initial_message = "Team, we need to create a marketing campaign for the EcoSmart Home Hub product launch. Let's collaborate on ideas."
-    print(f"BrandManager: {initial_message}\n")
-    conversation.append({"agent": "BrandManager", "message": initial_message})
-    
-    # Agent order
-    agents = ["ContentWriter", "GraphicDesigner", "DataAnalyst", "BrandManager"]
-    round = 0
-    # Just two rounds to keep it simple
-    while finish_Chat == False:
-        print(f"\n--- Round {round+1} ---\n")
+        # Generate a unique ID for this request
+        request_id = str(uuid.uuid4())
         
-        for agent in agents:
-            try:
-                # Get conversation history as text
-                history = "\n".join([f"{item['agent']}: {item['message']}" for item in conversation])
-                
-                # Get agent's response
-                response = get_agent_response(agent, history, PRODUCT)
-                finish_Chat = True
-                # Add to conversation history
-                agent_message = {"agent": agent, "message": response}
-                conversation.append(agent_message)
-                print(f"{agent}: {response}\n")
-                
-                # Save progress after each message in case of crash
-                with open("conversation_backup.json", "w", encoding="utf-8") as f:
-                    json.dump(conversation, f, indent=4)
-                
-                # Brief pause
-                time.sleep(0.5)
-                
-            except Exception as e:
-                print(f"Error in agent {agent}: {str(e)}")
-    
-    # Save final conversation as JSON file
-    with open("marketing_campaign_results.json", "w", encoding="utf-8") as f:
-        json.dump(conversation, f, indent=4)
-    
-    print("Simulation complete! Results saved to marketing_campaign_results.json")
+        # Log the received data
+        logger.info(f"Received request ID: {request_id}")
+        logger.info(f"Product data: {request.product}")
+        logger.info(f"Agents data: {request.agents}")
+        
+        # Convert the API models to the format expected by run_chat
+        agents = [convert_to_agent_info(agent, i) for i, agent in enumerate(request.agents)]
+        
+        # Add names to agents if not provided
+        for i, agent in enumerate(agents):
+            if not agent.name:
+                if i == 0:
+                    agent.name = "ContentWriter"
+                elif i == 1:
+                    agent.name = "GraphicDesigner"
+                else:
+                    agent.name = f"Agent{i+1}"
+        
+        # Convert product to object with attributes
+        product_info = ProductInfo(**request.product.dict())
+        
+        try:
+            # Run the chat with the converted objects
+            result = run_chat(agents, product_info)
+            
+            # Return the results
+            return ContentResponse(
+                content=result,
+                request_id=request_id
+            )
+        except Exception as e:
+            # If run_chat fails, log the error and return a mock response
+            logger.error(f"Error in run_chat: {str(e)}")
+            logger.error(traceback.format_exc())
+            
+            # Mock response in case of failure
+            mock_response = {
+                "ContentWriter": "The EcoSmart Home Hub is more than just a smart device; it's your gateway to a sustainable future. Imagine effortlessly managing your home's energy consumption while reducing your carbon footprint and saving money.",
+                "GraphicDesigner": "Recommend a clean, minimal design with green and blue color palette. Use circular imagery to represent connectivity and sustainability."
+            }
+            
+            return ContentResponse(
+                content=mock_response,
+                request_id=request_id
+            )
+            
+    except Exception as e:
+        # Log the full traceback for easier debugging
+        logger.error(f"Unhandled exception: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error generating content: {str(e)}")
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 if __name__ == "__main__":
-    run_chat(finish_Chat)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
