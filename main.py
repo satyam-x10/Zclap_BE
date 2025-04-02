@@ -19,7 +19,7 @@ app = FastAPI()
 # Enable frontend access (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://zclap.vercel.app/","http:localhost:5173"],  # You can restrict to frontend domain in production
+    allow_origins=["https://zclap.vercel.app", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
