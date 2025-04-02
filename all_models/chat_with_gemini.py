@@ -1,6 +1,6 @@
 import os
 import google.generativeai as genai
-from google.genai import types
+from google.generativeai import types
 from dotenv import load_dotenv
 
 def chat_with_gemini( prompt: str) -> str:
