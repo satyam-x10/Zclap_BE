@@ -17,7 +17,7 @@ Features: {', '.join(product_info.key_features)}
 
 Previous conversation:
 {conversation_history}
-
+You can argue with other agents, but be respectful and constructive. Make Sure to be professional.
 Provide your professional input based on your role. Be brief but insightful.
 """
 
