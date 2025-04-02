@@ -59,7 +59,7 @@ def run_chat(agents, product_info):
     max_rounds = 2
     serial_no = 2
 
-    while rounds < max_rounds:
+    if rounds < max_rounds:
         print(f"\n--- Round {rounds + 1} ---\n")
         for agent_info in agents:
             print(agent_info)
@@ -93,12 +93,25 @@ def run_chat(agents, product_info):
         rounds += 1
         if rounds >= max_rounds:
             finish_chat = True
+    else:
+        print("Maximum rounds reached. Ending simulation.")               
 
     # Save the final conversation results to a file
-    with open("result.json", "w", encoding="utf-8") as f:
-        json.dump(conversation, f, indent=4)
+    # with open("result.json", "w", encoding="utf-8") as f:
+    #     json.dump(conversation, f, indent=4)
 
     print("Simulation complete! Results saved to result.json")
-    
-    # Return conversation data to be used by the API
-    return {"conversation": conversation}
+
+    summary_prompt = f"You are a summary agent. Please summarize the conversation in 200 words max:\n\n {history}"
+    summary = chat_with_gemini(summary_prompt)
+    print("Summary of the conversation:", summary)
+
+    # with open("summary.json", "w", encoding="utf-8") as f:
+    #     json.dump(summary, f, indent=4)
+
+    # Return conversation data AND summary to be used by the API
+    both = {
+        "conversation": conversation,
+        "summary": summary
+    }
+    return {"both": both}

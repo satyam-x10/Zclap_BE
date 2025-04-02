@@ -78,8 +78,9 @@ async def generate_content(request: ContentRequest):
         try:
             # Run the chat with the converted objects
             result = run_chat(agents, product_info)
-            print('result', result)
+            print('result is', result)
             single_string = json.dumps(result)
+
             print(single_string)
             # Return the results
             return ContentResponse(
