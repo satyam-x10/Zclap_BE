@@ -5,6 +5,7 @@ from typing import List, Dict
 import uuid
 import logging
 import traceback
+import json
 
 # Import the AgentInfo class and run_chat function from your main module
 from app import run_chat, AgentInfo
@@ -26,9 +27,8 @@ app.add_middleware(
 
 # Define data models for API requests
 class AgentInfoAPI(BaseModel):
-    role: str
     model: str
-    name: str = ""  # Default empty string for name
+    role: str
 
 class ProductInfoAPI(BaseModel):
     name: str
@@ -41,14 +41,14 @@ class ContentRequest(BaseModel):
     agents: List[AgentInfoAPI]
 
 class ContentResponse(BaseModel):
-    content: Dict[str, str]
+    content: str
     request_id: str
 
 # Convert API model to AgentInfo object
 def convert_to_agent_info(agent_api, index):
     # If name is not provided, generate one based on index
-    name = agent_api.name if agent_api.name else f"Agent{index+1}"
-    return AgentInfo(role=agent_api.role, model=agent_api.model, name=name)
+    role = agent_api.role if agent_api.role else f"Agent{index+1}"
+    return AgentInfo(model=agent_api.model, role=role)
 
 # Convert API model to ProductInfo object (using a dynamic class)
 class ProductInfo:
@@ -70,15 +70,7 @@ async def generate_content(request: ContentRequest):
         # Convert the API models to the format expected by run_chat
         agents = [convert_to_agent_info(agent, i) for i, agent in enumerate(request.agents)]
         
-        # Add names to agents if not provided
-        for i, agent in enumerate(agents):
-            if not agent.name:
-                if i == 0:
-                    agent.name = "ContentWriter"
-                elif i == 1:
-                    agent.name = "GraphicDesigner"
-                else:
-                    agent.name = f"Agent{i+1}"
+             
         
         # Convert product to object with attributes
         product_info = ProductInfo(**request.product.dict())
@@ -86,10 +78,12 @@ async def generate_content(request: ContentRequest):
         try:
             # Run the chat with the converted objects
             result = run_chat(agents, product_info)
-            
+            print('result', result)
+            single_string = json.dumps(result)
+            print(single_string)
             # Return the results
             return ContentResponse(
-                content=result,
+                content=single_string,
                 request_id=request_id
             )
         except Exception as e:
